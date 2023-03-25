@@ -13,6 +13,33 @@ import json
 import numpy as np
 from task1_match_mismatch.util import envelope
 from task1_match_mismatch.models.dilated_convolutional_model import dilation_model
+import tensorflow as tf
+
+def composite_model(models):
+
+    eeg = tf.keras.layers.Input(shape=[64*3, 64])
+    env1 = tf.keras.layers.Input(shape=[64*3, 1])
+    env2 = tf.keras.layers.Input(shape=[64*3, 1])
+
+    op = models[0]([eeg, env1, env2])
+
+    if len(models) > 1:
+        
+        for i, model in enumerate(models[1:]):
+            models[i+1]._name = f'model{i}'
+            op += models[i+1]([eeg, env1, env2])
+
+    op = op/len(models)
+
+    final_model = tf.keras.Model(inputs=[eeg, env1, env2], outputs=[op])
+
+    final_model.compile(
+        optimizer=tf.keras.optimizers.Adam(0.001),
+        metrics=["acc"],
+        loss=["binary_crossentropy"],
+    )
+    print(final_model.summary())
+    return final_model
 
 
 def create_test_samples(eeg_path, envelope_dir):
@@ -54,10 +81,23 @@ if __name__ == '__main__':
 
     # Root dataset directory containing test set
     # Change the path to the downloaded test dataset dir
-    dataset_dir = 'path/to/test/dataset'
+    dataset_dir = './data/test-task1'
+    models_dir = './task1_match_mismatch/experiments/results_submission_1/trained_baseline_models/'
+
+    mdls = []
+
+    for mdl in range(1, 51):
+        file = os.path.join(models_dir, f'eval_baseline_{mdl}.json')
+        dic = json.load(open(file, 'r'))
+        print(np.mean([dic[k]['acc'] for k in dic]))
+
+        mdls.append(
+            tf.keras.models.load_model(os.path.join(models_dir, f'model_env_baseline_{mdl}.h5'))
+        )
 
     # Path to your pretrained model
-    pretrained_model = os.path.join(os.path.dirname(__file__), 'results_dilated_convolutional_model', 'model.h5')
+    model = composite_model(mdls)
+    print('loaded model')
 
     # Calculate envelope of the speech files (only if the envelope directory does not exist)
     stimuli_dir = os.path.join(dataset_dir, 'stimuli_segments')
@@ -73,11 +113,9 @@ if __name__ == '__main__':
             np.savez(target_path, envelope=env)
 
 
-    # Define and load the pretrained model
-    model = dilation_model(time_window=window_length)
-    model.load_weights(pretrained_model)
 
-    test_data = glob.glob(os.path.join(dataset_dir, 'sub*.json'))
+    test_data = glob.glob(os.path.join(dataset_dir, 'preprocessed_eeg', 'sub*.json'))
+    
     for sub_path in test_data:
         subject = os.path.basename(sub_path).split('.')[0]
 
@@ -91,15 +129,15 @@ if __name__ == '__main__':
         sub_dataset = tuple(subject_data)
 
         predictions = model.predict(sub_dataset)
-        predictions = list(np.squeeze(predictions))
-        predictions = map(get_label, predictions)
-        sub = dict(zip(id_list, predictions))
+        predictions = np.squeeze(predictions).tolist()
+        predicted_labels = map(get_label, predictions)
+        sub_predicted_labels = dict(zip(id_list, predicted_labels))
+        sub_soft_outputs = dict(zip(id_list, predictions))
 
-        prediction_dir = os.path.join(os.path.dirname(__file__), 'predictions')
+        prediction_dir = os.path.join(os.path.dirname(__file__), '../', 'results_submission_1', 'heldout_predictions_avg_baseline')
         os.makedirs(prediction_dir, exist_ok=True)
         with open(os.path.join(prediction_dir, subject + '.json'), 'w') as f:
-            json.dump(sub, f)
+            json.dump(sub_predicted_labels, f)
 
-
-
-
+        with open(os.path.join(prediction_dir, subject + '-outputs.json'), 'w') as f:
+            json.dump(sub_soft_outputs, f)

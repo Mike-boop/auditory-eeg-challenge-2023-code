@@ -1,10 +1,8 @@
 {
-  "dataset_folder": "/media/mdt20/Storage/data/auditory-eeg/",
+  "dataset_folder": "/media/mdt20/Storage/data/auditory-eeg/512Hz",
   "raw_eeg_folder": "raw_eeg",
   "raw_stimuli_folder": "stimuli",
   "preprocessed_eeg_folder": "preprocessed_eeg",
   "preprocessed_stimuli_folder": "preprocessed_stimuli",
-  "hf_preprocessed_eeg_folder": "500Hz/preprocessed_eeg",
-  "hf_preprocessed_stimuli_folder": "500Hz/preprocessed_stimuli",
   "split_folder": "split_data"
 }

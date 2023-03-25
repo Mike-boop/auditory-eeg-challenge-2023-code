@@ -5,14 +5,12 @@ import logging
 import os
 import tensorflow as tf
 
-from task1_match_mismatch.models.dilated_convolutional_model import dilation_model
+from task1_match_mismatch.models.regularised_dilated_convolutional_model import dilation_model
 from task1_match_mismatch.util.dataset_generator import MatchMismatchDataGenerator, default_batch_equalizer_fn, create_tf_dataset
 
 # tf.debugging.set_log_device_placement(True)
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(gpus[0], True)
-
-#os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 def evaluate_model(model, test_dict):
     """Evaluate a model.
@@ -36,7 +34,6 @@ def evaluate_model(model, test_dict):
         evaluation[subject] = dict(zip(metrics, results))
     return evaluation
 
-
 if __name__ == "__main__":
     # Parameters
     # Length of the decision window
@@ -48,13 +45,13 @@ if __name__ == "__main__":
     epochs = 100
     patience = 5
     batch_size = 64
-    only_evaluate = False
+    only_evaluate = True
     training_log_filename = "training_log.csv"
-    results_filename = 'eval.json'
+    results_filename = 'regularised_baseline_eval.json'
 
 
     # Get the path to the config gile
-    experiments_folder = os.path.dirname(__file__)
+    experiments_folder = './task1_match_mismatch/experiments'
     task_folder = os.path.dirname(experiments_folder)
     config_path = os.path.join(task_folder, 'util', 'config.json')
 
@@ -67,31 +64,21 @@ if __name__ == "__main__":
     data_folder = os.path.join(config["dataset_folder"], config["split_folder"])
 
     # stimulus feature which will be used for training the model. Can be either 'envelope' ( dimension 1) or 'mel' (dimension 28)
-    # stimulus_features = ["envelope"]
-    # stimulus_dimension = 1
-
-#    uncomment if you want to train with the mel spectrogram stimulus representation
     stimulus_features = ["envelope"]
     stimulus_dimension = 1
 
     features = ["eeg"] + stimulus_features
 
-    # Create a directory to store (intermediate) results
-    results_folder = os.path.join(experiments_folder, "results_dilated_convolutional_model")
+    results_folder = os.path.join(experiments_folder, "results_submission_3", "population_env_model")
     os.makedirs(results_folder, exist_ok=True)
 
     #create dilation model
     model = dilation_model(time_window=window_length, eeg_input_dimension=64, env_input_dimension=stimulus_dimension)
-    model_path = os.path.join(results_folder, "model_env_baseline.h5")
-    #model = tf.keras.models.load_model(model_path)
-
-    # stim_layers = ['conv1d_2', 'conv1d_4', 'conv1d_6', 'dense']
-    # for layer in stim_layers:
-    #     model.get_layer(layer).trainable=False
-
+    model_path = os.path.join(results_folder, "population_env_model.h5")
     if only_evaluate:
         model = tf.keras.models.load_model(model_path)
-    else:
+
+    if not only_evaluate:
 
         train_files = [x for x in glob.glob(os.path.join(data_folder, "train_-_*")) if os.path.basename(x).split("_-_")[-1].split(".")[0] in features]
         # Create list of numpy array files
@@ -115,6 +102,7 @@ if __name__ == "__main__":
             ],
         )
 
+
     # Evaluate the model on test set
     # Create a dataset generator for each test subject
     test_files = [x for x in glob.glob(os.path.join(data_folder, "test_-_*")) if os.path.basename(x).split("_-_")[-1].split(".")[0] in features]
@@ -126,6 +114,7 @@ if __name__ == "__main__":
         files_test_sub = [f for f in test_files if sub in os.path.basename(f)]
         test_generator = MatchMismatchDataGenerator(files_test_sub, window_length, spacing=spacing)
         datasets_test[sub] = create_tf_dataset(test_generator, window_length, default_batch_equalizer_fn, hop_length, 1, feature_dims=(64, stimulus_dimension, stimulus_dimension))
+
 
     # Evaluate the model
     evaluation = evaluate_model(model, datasets_test)

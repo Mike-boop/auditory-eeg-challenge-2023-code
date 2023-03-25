@@ -73,13 +73,14 @@ def dilation_model(
     else:
         activations = activation
 
-    env_proj_1 = env1
-    env_proj_2 = env2
+    env_proj_1 = tf.keras.layers.BatchNormalization()(env1)
+    env_proj_2 = tf.keras.layers.BatchNormalization()(env2)
 
-    #eeg = tf.keras.layers.SpatialDropout1D(0.15)(eeg)
+    eeg = tf.keras.layers.SpatialDropout1D(0.1)(eeg)
+    eeg_proj_1 = tf.keras.layers.BatchNormalization()(eeg) #bnorm time dimension
 
     # Spatial convolution
-    eeg_proj_1 = tf.keras.layers.Conv1D(spatial_filters, kernel_size=1)(eeg)
+    eeg_proj_1 = tf.keras.layers.Conv1D(spatial_filters, kernel_size=1, use_bias=False)(eeg)
 
     # Construct dilation layers
     for layer_index in range(layers):
@@ -93,6 +94,8 @@ def dilation_model(
             #padding='same'
         )(eeg_proj_1)
 
+        eeg_proj_1 = tf.keras.layers.BatchNormalization(axis=-1)(eeg_proj_1)
+
         #Dilation on envelope data, share weights
         env_proj_layer = tf.keras.layers.Conv1D(
             dilation_filters,
@@ -104,6 +107,31 @@ def dilation_model(
         env_proj_1 = env_proj_layer(env_proj_1)
         env_proj_2 = env_proj_layer(env_proj_2)
 
+        env_proj_1 = tf.keras.layers.BatchNormalization(axis=-1)(env_proj_1) #bnorm time dimension
+        env_proj_2 = tf.keras.layers.BatchNormalization(axis=-1)(env_proj_2)
+#     env_proj_layer = tf.keras.layers.Conv1D(
+#     dilation_filters,
+#     kernel_size=kernel_size,
+#     dilation_rate=1,
+#     strides=1,
+#     activation=activations[0],
+#     padding='same'
+# )
+#     env_proj_1 = env_proj_layer(env_proj_1)
+#     env_proj_2 = env_proj_layer(env_proj_2)
+
+    ## similarity
+
+    # eeg_proj_1 = eeg_proj_1 - tf.expand_dims(tf.reduce_mean(eeg_proj_1, axis=1),1)
+    # env_proj_1 = env_proj_1 - tf.expand_dims(tf.reduce_mean(env_proj_1, axis=1),1)
+    # env_proj_2 = env_proj_2 - tf.expand_dims(tf.reduce_mean(env_proj_2, axis=1),1)
+
+    # eeg_proj_1 = eeg_proj_1/tf.expand_dims(tf.math.reduce_std(eeg_proj_1, axis=1),1)
+    # env_proj_1 = env_proj_1/tf.expand_dims(tf.math.reduce_std(env_proj_1, axis=1),1)
+    # env_proj_2 = env_proj_2/tf.expand_dims(tf.math.reduce_std(env_proj_2, axis=1),1)
+
+    # cos1 = eeg_proj_1 * env_proj_1
+    # cos2 = eeg_proj_1 * env_proj_2
 
     # Comparison
     cos1 = tf.keras.layers.Dot(1, normalize=True)([eeg_proj_1, env_proj_1])

@@ -7,21 +7,20 @@ import pickle
 
 import numpy as np
 
-
 if __name__ == "__main__":
 
     # Arguments for splitting and normalizing
-    speech_features = ['envelope', 'mel']
+    speech_features = ['env', 'lp', 'mod']
     splits = [80, 10, 10]
     split_names = ['train', 'val', 'test']
-    overwrite = False
+    overwrite = True
 
     # Calculate the split fraction
     split_fractions = [x/sum(splits) for x in splits]
 
     # Get the path to the config file
     task_folder = os.path.dirname(os.path.dirname(__file__))
-    config_path = os.path.join(task_folder, 'util', 'config.json')
+    config_path = os.path.join(task_folder, 'util', 'config_512Hz.json')
 
     # Load the config
     with open(config_path) as fp:
@@ -31,6 +30,10 @@ if __name__ == "__main__":
     processed_eeg_folder = os.path.join(config["dataset_folder"], config["preprocessed_eeg_folder"])
     processed_stimuli_folder = os.path.join(config["dataset_folder"], config["preprocessed_stimuli_folder"])
     split_data_folder = os.path.join(config["dataset_folder"], config["split_folder"])
+
+
+    train_stimfiles = glob.glob(os.path.join(config["raw_stimuli_folder"], '*.npz'))
+    train_stimfiles = [f.split('/')[-1] for f in train_stimfiles]
 
     # Create the output folder
     os.makedirs(split_data_folder, exist_ok=True)
@@ -55,6 +58,8 @@ if __name__ == "__main__":
             print(f"\t\tLoading EEG for {recording}")
             with open(recording, "rb") as fp:
                 data = pickle.load(fp)
+                if data['stimulus'] not in train_stimfiles:
+                    continue
 
             # Retrieve EEG data and pointer to the stimulus
             eeg, stimulus_filename = data["eeg"], data["stimulus"]

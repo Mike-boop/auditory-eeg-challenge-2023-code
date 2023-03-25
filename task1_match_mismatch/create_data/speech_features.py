@@ -8,6 +8,7 @@ import numpy as np
 
 from task1_match_mismatch.util.envelope import calculate_envelope
 from task1_match_mismatch.util.mel_spectrogram import calculate_mel_spectrogram
+from task1_match_mismatch.util.modulations import calculate_env_modulations
 
 if __name__ == "__main__":
 
@@ -29,8 +30,11 @@ if __name__ == "__main__":
     dataset_folder = config["dataset_folder"]
 
     source_stimuli_folder = os.path.join(dataset_folder, config["raw_stimuli_folder"])
-    # Get the path to save the preprocessed files
+    # Get the path to save the preprocessed files at 64Hz
     output_stimuli_folder = os.path.join(dataset_folder, config["preprocessed_stimuli_folder"])
+    # Get the path to save the preprocessed files at 512Hz
+    hf_output_stimuli_folder = os.path.join(dataset_folder, config["hf_preprocessed_stimuli_folder"])
+
 
     # Create the save directory if it didn't exist already
     os.makedirs(output_stimuli_folder, exist_ok=True)
@@ -64,4 +68,6 @@ if __name__ == "__main__":
         else:
             print(f"Skipping {mel_path} because it already exists")
 
-
+        # Env Modulations
+        mod_path = os.path.join(hf_output_stimuli_folder, filename.replace(".npz", "_mod.npy"))
+        mod = calculate_env_modulations(filename)

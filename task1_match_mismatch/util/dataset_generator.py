@@ -58,7 +58,8 @@ def create_tf_dataset(
     hop_length=64,
     batch_size=64,
     data_types=(tf.float32, tf.float32, tf.float32),
-    feature_dims=(64, 1, 1)
+    feature_dims=(64, 1, 1),
+    randomise=False
 ):
     """Creates a tf.data.Dataset.
 
@@ -107,6 +108,9 @@ def create_tf_dataset(
         ]
     )
 
+    # if randomise:
+    #     dataset=dataset.shuffle(2048,0)
+
     # batch data
     dataset = dataset.interleave(
         lambda *args: tf.data.Dataset.from_tensor_slices(args),
@@ -131,7 +135,9 @@ class MatchMismatchDataGenerator:
         self,
         files,
         window_length,
-        spacing
+        spacing,
+        randomise=False,
+        mismatch_pre_post=False
     ):
         """Initialize the DataGenerator.
 
@@ -147,6 +153,8 @@ class MatchMismatchDataGenerator:
         self.window_length = window_length
         self.files = self.group_recordings(files)
         self.spacing = spacing
+        self.randomise = randomise
+        self.mismatch_pre_post = mismatch_pre_post
 
     def group_recordings(self, files):
         """Group recordings and corresponding stimuli.
@@ -224,12 +232,34 @@ class MatchMismatchDataGenerator:
         """
         eeg = data[0]
         new_length = eeg.shape[0] - self.window_length - self.spacing
-        resulting_data = [eeg[:new_length, ...]]
+
+        if self.randomise:
+            offset = np.random.randint(0, self.window_length+self.spacing)
+            new_length = new_length-self.window_length-self.spacing #minus maximum offset, to keep same number of batches per epoch
+        else:
+            offset = 0
+
+        if self.mismatch_pre_post:
+
+            for stimulus_feature in data[1:]:
+            
+                resulting_data = [np.vstack([eeg[offset:offset+new_length], eeg[offset+self.window_length+self.spacing:offset+self.window_length+self.spacing+new_length]])]
+                match_feature = np.vstack([stimulus_feature[offset:offset+new_length], stimulus_feature[offset+self.window_length+self.spacing:offset+self.window_length+self.spacing+new_length]])
+                mismatch_feature = np.vstack([stimulus_feature[offset+self.window_length+self.spacing:offset+self.window_length+self.spacing+new_length], stimulus_feature[offset:offset+new_length]])
+
+                #assert len(match_feature) == len(mismatch_feature)
+                resulting_data += [match_feature, mismatch_feature]
+
+                return resulting_data
+
         for stimulus_feature in data[1:]:
-            match_feature = stimulus_feature[:new_length, ...]
-            mismatch_feature = stimulus_feature[
-                self.spacing + self.window_length:, ...
-            ]
+            
+            resulting_data = [eeg[offset:offset+new_length, ...]]
+            match_feature = stimulus_feature[offset:offset+new_length, ...]
+            mismatch_feature = stimulus_feature[offset+self.window_length+self.spacing:offset+self.window_length+self.spacing+new_length]
+
+            #assert len(match_feature) == len(mismatch_feature)
             resulting_data += [match_feature, mismatch_feature]
+
         return resulting_data
 
